@@ -98,8 +98,8 @@ bool correctness_test(const char* filename, int iterations, int threads) {
     for(i = 0; i < iterations; ++i) {
         printf("\rTesting %-25s (%d threads) %d/%d iterations complete", filename, threads, i, iterations);
         fflush(stdout);
-        gol_serial(board1, n, m, 1);
-        gol_parallel(board2, n, m, 1, threads);
+        gol_serial(board1, n, m, i+1);
+        gol_parallel(board2, n, m, i+1, threads);
         if(!identical(board1, board2, n, m)) {
             printf("\nError at %s on iteration %d\n", filename, i+1);
             return false;
