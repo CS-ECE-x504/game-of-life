@@ -2,12 +2,14 @@
 #include "gol_serial.h"
 #include "gol_parallel.h"
 
+bool run_cuda=0;
+
 int main(int argc, char** argv) {
     bool cflag = false, pflag = false, vflag = false;
     char* filename = 0;
     int c;
 
-    while((c = getopt(argc, argv, "cpv:")) != -1) {
+    while((c = getopt(argc, argv, "gcpv:")) != -1) {
         switch(c) {
             case 'c':
                 cflag = true;
@@ -18,6 +20,9 @@ int main(int argc, char** argv) {
             case 'v':
                 vflag = true;
                 filename = optarg;
+                break;
+            case 'g':
+                run_cuda=1;
                 break;
             case '?':
                 print_usage();
@@ -52,10 +57,25 @@ int main(int argc, char** argv) {
 }
 
 void print_usage() {
-printf("usage: ./gameoflife [-c] [-p] [-v filename]\n"
+printf("usage: ./gameoflife [-c] [-p] [-v filename] [-g]\n"
        "       -c Runs a suite of correctness tests\n"
        "       -p Runs performance tests\n"
-       "       -v Runs a configuration file in visual mode\n");
+       "       -v Runs a configuration file in visual mode\n"
+       "       -g Runs the CUDA version instead of the pthreads version\n");
+}
+
+void run_gol_cuda(bool* cells, int n, int m, int iterations, int threads) {
+    if(threads == 0){
+        int gx = (n / 16);
+        int gy = (m / 16);
+        if(n%16)
+            gx++;
+        if(m%16)
+            gy++;
+        gol_cuda(cells, n, m, iterations, gx, gy, 16, 16);
+    }else{
+        gol_cuda(cells, n, m, iterations, threads, 1, 16, 16);
+    }
 }
 
 void visual_mode(const char* filename) {
@@ -65,9 +85,12 @@ void visual_mode(const char* filename) {
     while(1) {
         system("clear");
         print_game(cells, n, m);
-        gol_parallel(cells, n, m, 1, 4);
+        if(run_cuda)
+            run_gol_cuda(cells, n, m, 1, 4);
+        else
+            gol_parallel(cells, n, m, 1, 4);
         //gol_serial(cells, n, m, 1);
-        usleep(500000);
+        usleep(5000000);
     }
 }
 
@@ -87,23 +110,28 @@ void correctness_tests() {
     correctness_test("config/large_glider", 50, 9);
     correctness_test("config/xl_glider", 50, 4);
     correctness_test("config/xl_glider", 50, 8);
+    correctness_test("config/xxl_random", 50, 8);
+    if(run_cuda){
+        correctness_test("config/xxl_random", 50, 0);
+    }
 }
 
 bool correctness_test(const char* filename, int iterations, int threads) {
-    int i, n, m;
+    int n, m;
     bool* board1;
     bool* board2;
     input_game(&board1, &n, &m, filename);
     input_game(&board2, &n, &m, filename);
-    for(i = 0; i < iterations; ++i) {
-        printf("\rTesting %-25s (%d threads) %d/%d iterations complete", filename, threads, i, iterations);
-        fflush(stdout);
-        gol_serial(board1, n, m, 1);
-        gol_parallel(board2, n, m, 1, threads);
-        if(!identical(board1, board2, n, m)) {
-            printf("\nError at %s on iteration %d\n", filename, i+1);
-            return false;
-        }
+    fflush(stdout);
+    gol_serial(board1, n, m, iterations);
+    if(run_cuda){
+        run_gol_cuda(board2, n, m, iterations, threads);
+    }else{
+        gol_parallel(board2, n, m, iterations, threads);
+    }
+    if(!identical(board1, board2, n, m)) {
+        printf("\nError encountered, parallel output does not match for file '%s'\n", filename);
+        return false;
     }
     printf("\rTesting %-25s (%d threads) %d/%d iterations complete\n", filename, threads, iterations, iterations);
     free(board1);
@@ -115,7 +143,13 @@ void performance_tests() {
     printf("PERFORMANCE TESTS:\n");
     performance_test("config/xl_glider", 1000, 2);
     performance_test("config/xl_glider", 1000, 4);
-    performance_test("config/xl_glider", 1000, 8);
+    if(run_cuda){
+        performance_test("config/xl_glider", 1000, 0);
+        performance_test("config/xxl_random", 1000, 0);
+    }else{
+        performance_test("config/xl_glider", 1000, 8);
+        performance_test("config/xxl_random", 1000, 8);
+    }
 }
 
 void performance_test(const char* filename, int iterations, int threads) {
@@ -138,7 +172,13 @@ void performance_test(const char* filename, int iterations, int threads) {
     printf("Parallel time: ");
     fflush(stdout);
     gettimeofday(&start, NULL);
-    gol_parallel(board1, n, m, iterations, threads);
+
+    if(run_cuda){
+        run_gol_cuda(board1, n, m, iterations, threads);
+    }else{
+        gol_parallel(board1, n, m, iterations, threads);
+    }
+
     gettimeofday(&end, NULL);
     parallel_time = ms_difference(start, end);
     printf("%d ms\n", parallel_time);
