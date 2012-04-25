@@ -13,7 +13,7 @@ gol_parallel.o: gol_parallel.c gol_parallel.h
 
 
 gameoflife: $(OBJECTS) gol_cuda.cu gol_parallel.h
-	nvcc -o gameoflife $(OBJECTS) gol_cuda.cu
+	nvcc -o gameoflife -O2 -arch=sm_13 --ptxas-options=-v  $(OBJECTS) gol_cuda.cu
 
 clean:
 	rm -f *.o *~ gameoflife
