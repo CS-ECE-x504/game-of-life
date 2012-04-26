@@ -17,7 +17,7 @@ typedef char bool;
 
 void print_usage();
 void correctness_tests();
-bool correctness_test(const char*, int, int);
+bool correctness_test(const char*, int, int, int);
 void performance_tests();
 void performance_test(const char*, int, int);
 int ms_difference(struct timeval, struct timeval);

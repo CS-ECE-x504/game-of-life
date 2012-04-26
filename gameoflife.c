@@ -96,44 +96,51 @@ void visual_mode(const char* filename) {
 
 void correctness_tests() {
     printf("CORRECTNESS TESTS:\n");
-    correctness_test("config/glider", 50, 1);
-    correctness_test("config/glider", 50, 2);
-    correctness_test("config/glider", 50, 3);
-    correctness_test("config/pulsar", 50, 2);
-    correctness_test("config/pulsar", 50, 4);
-    correctness_test("config/pulsar", 50, 5);
-    correctness_test("config/tumbler", 50, 3);
-    correctness_test("config/tumbler", 50, 5);
-    correctness_test("config/tumbler", 50, 7);
-    correctness_test("config/large_glider", 50, 4);
-    correctness_test("config/large_glider", 50, 8);
-    correctness_test("config/large_glider", 50, 9);
-    correctness_test("config/xl_glider", 50, 4);
-    correctness_test("config/xl_glider", 50, 8);
-    correctness_test("config/xxl_random", 50, 8);
-    if(run_cuda){
-        correctness_test("config/xxl_random", 50, 0);
+    int steps[] = {1, 2, 5, 10};
+    int i, passed = 0;
+    for(i = 0; i < 4; ++i) {
+        passed += correctness_test("config/glider", 50, 1, steps[i]) ? 1 : 0;
+        passed += correctness_test("config/glider", 50, 2, steps[i]) ? 1 : 0;
+        passed += correctness_test("config/glider", 50, 3, steps[i]) ? 1 : 0;
+        passed += correctness_test("config/pulsar", 50, 2, steps[i]) ? 1 : 0;
+        passed += correctness_test("config/pulsar", 50, 4, steps[i]) ? 1 : 0;
+        passed += correctness_test("config/pulsar", 50, 5, steps[i]) ? 1 : 0;
+        passed += correctness_test("config/tumbler", 50, 3, steps[i]) ? 1 : 0;
+        passed += correctness_test("config/tumbler", 50, 5, steps[i]) ? 1 : 0;
+        passed += correctness_test("config/tumbler", 50, 7, steps[i]) ? 1 : 0;
+        passed += correctness_test("config/large_glider", 50, 4, steps[i]) ? 1 : 0;
+        passed += correctness_test("config/large_glider", 50, 8, steps[i]) ? 1 : 0;
+        passed += correctness_test("config/large_glider", 50, 9, steps[i]) ? 1 : 0;
+        passed += correctness_test("config/xl_glider", 50, 4, steps[i]) ? 1 : 0;
+        passed += correctness_test("config/xl_glider", 50, 8, steps[i]) ? 1 : 0;
+        if(run_cuda){
+            passed += correctness_test("config/xxl_random", 50, 0, steps[i]) ? 1 : 0;
+        }
     }
+    printf("%d/%d tests passed\n", passed, run_cuda ? 60 : 56);
 }
 
-bool correctness_test(const char* filename, int iterations, int threads) {
-    int n, m;
+bool correctness_test(const char* filename, int iterations, int threads, int step) {
+    int i, n, m;
     bool* board1;
     bool* board2;
     input_game(&board1, &n, &m, filename);
     input_game(&board2, &n, &m, filename);
-    fflush(stdout);
-    gol_serial(board1, n, m, iterations);
-    if(run_cuda){
-        run_gol_cuda(board2, n, m, iterations, threads);
-    }else{
-        gol_parallel(board2, n, m, iterations, threads);
+    for(i = 0; i < iterations; i += step) {
+        printf("\rTesting %-25s (%d threads, %d step(s)) %d/%d iterations complete", filename, threads, step, i, iterations);
+        fflush(stdout);
+        gol_serial(board1, n, m, step);
+        if(run_cuda){
+            run_gol_cuda(board2, n, m, step, threads);
+        }else{
+            gol_parallel(board2, n, m, step, threads);
+        }
+        if(!identical(board1, board2, n, m)) {
+            printf("\nError at %s on iteration %d\n", filename, i+1);
+            return false;
+        }
     }
-    if(!identical(board1, board2, n, m)) {
-        printf("\nError encountered, parallel output does not match for file '%s'\n", filename);
-        return false;
-    }
-    printf("\rTesting %-25s (%d threads) %d/%d iterations complete\n", filename, threads, iterations, iterations);
+    printf("\rTesting %-25s (%d threads, %d step(s)) %d/%d iterations complete\n", filename, threads, step, iterations, iterations);
     free(board1);
     free(board2);
     return true;
